@@ -1,0 +1,326 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <time.h>
+#include <string.h>
+
+#define MAXN 10
+#define INF INT_MAX
+
+typedef struct {
+    char name[100];
+    char address[200];
+    char contact[32];
+    char email[100];
+    char dob[20];
+    char sex[10];
+    char medicalHistory;  
+} PersonInfo;
+
+static double diff_seconds(struct timespec start, struct timespec end) {
+    double s = (double)(end.tv_sec - start.tv_sec);
+    double ns = (double)(end.tv_nsec - start.tv_nsec);
+    return s + ns * 1e-9;
+}
+
+static void trim_newline(char *s) {
+    size_t L = strlen(s);
+    if (L > 0 && s[L-1] == '\n') s[L-1] = '\0';
+}
+
+void inputPersonalInfo(PersonInfo *p) {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF) {}
+
+    printf("\n--- Enter Personal Information (single person) ---\n");
+
+    printf("Name: ");
+    fgets(p->name, sizeof(p->name), stdin);
+    trim_newline(p->name);
+
+    printf("Address: ");
+    fgets(p->address, sizeof(p->address), stdin);
+    trim_newline(p->address);
+
+    printf("Contact Number: ");
+    fgets(p->contact, sizeof(p->contact), stdin);
+    trim_newline(p->contact);
+
+    printf("Email Address: ");
+    fgets(p->email, sizeof(p->email), stdin);
+    trim_newline(p->email);
+
+    printf("Date of Birth (DD/MM/YYYY): ");
+    fgets(p->dob, sizeof(p->dob), stdin);
+    trim_newline(p->dob);
+
+    printf("Sex (M/F/O): ");
+    fgets(p->sex, sizeof(p->sex), stdin);
+    trim_newline(p->sex);
+
+    char mh[4];
+    while (1) {
+        printf("Medical History (Y/N): ");
+        fgets(mh, sizeof(mh), stdin);
+        trim_newline(mh);
+        if (mh[0]=='Y'||mh[0]=='y'||mh[0]=='N'||mh[0]=='n') {
+            p->medicalHistory = (mh[0]=='Y'||mh[0]=='y')?'Y':'N';
+            break;
+        }
+        printf("Please enter Y or N.\n");
+    }
+
+    printf("\nPersonal information saved.\n");
+}
+
+void printPersonalInfo(const PersonInfo *p) {
+    printf("\n--- Stored Personal Information ---\n");
+    printf("Name: %s\n", p->name);
+    printf("Address: %s\n", p->address);
+    printf("Contact: %s\n", p->contact);
+    printf("Email: %s\n", p->email);
+    printf("DOB: %s\n", p->dob);
+    printf("Sex: %s\n", p->sex);
+    printf("Medical History: %c\n", p->medicalHistory);
+}
+
+void inputBloodGroup(char bg[], size_t sz) {
+    char tmp[8];
+    int valid = 0;
+    while (!valid) {
+        printf("\nEnter Blood Group type (A, B, AB, O): ");
+        fgets(tmp, sizeof(tmp), stdin);
+        trim_newline(tmp);
+
+        if (!strcasecmp(tmp,"A") || !strcasecmp(tmp,"B") ||
+            !strcasecmp(tmp,"AB") || !strcasecmp(tmp,"O")) {
+
+            strncpy(bg, tmp, sz-1);
+            bg[sz-1] = '\0';
+            valid = 1;
+        } else {
+            printf("Invalid blood group.\n");
+        }
+    }
+    printf("Blood group saved: %s\n", bg);
+}
+
+long long primMST(int n, int graph[MAXN][MAXN]) {
+    int parent[MAXN], key[MAXN], inMST[MAXN];
+    for (int i=0;i<n;i++){
+        key[i]=INF; inMST[i]=0; parent[i]=-1;
+    }
+    key[0]=0;
+
+    for (int count=0;count<n-1;count++) {
+        int min=INF,u=-1;
+        for (int v=0;v<n;v++)
+            if(!inMST[v] && key[v]<min){ min=key[v]; u=v; }
+
+        inMST[u]=1;
+
+        for(int v=0;v<n;v++){
+            if(graph[u][v]!=INF && !inMST[v] && graph[u][v]<key[v]){
+                key[v]=graph[u][v];
+                parent[v]=u;
+            }
+        }
+    }
+
+    printf("\nPrim's MST edges (u - v : weight):\n");
+    long long total=0;
+    for (int i=1;i<n;i++){
+        printf(" %d - %d : %d\n", parent[i], i, graph[i][parent[i]]);
+        total += graph[i][parent[i]];
+    }
+    printf("Total cost (Prim): %lld\n", total);
+    return total;
+}
+
+typedef struct { int u,v,w; } Edge;
+
+int cmpEdge(const void *a,const void *b){
+    return ((Edge*)a)->w - ((Edge*)b)->w;
+}
+
+int find_set(int parent[], int x){
+    if(parent[x]!=x) parent[x] = find_set(parent,parent[x]);
+    return parent[x];
+}
+
+void union_set(int parent[],int rank[],int a,int b){
+    a=find_set(parent,a);
+    b=find_set(parent,b);
+    if(a!=b){
+        if(rank[a]<rank[b]) parent[a]=b;
+        else if(rank[b]<rank[a]) parent[b]=a;
+        else{ parent[b]=a; rank[a]++; }
+    }
+}
+
+long long kruskalMST(int n,int graph[MAXN][MAXN]){
+    Edge edges[n*n];
+    int ec=0;
+
+    for(int i=0;i<n;i++)
+        for(int j=i+1;j<n;j++)
+            if(graph[i][j]!=INF){
+                edges[ec++] = (Edge){i,j,graph[i][j]};
+            }
+
+    qsort(edges, ec, sizeof(Edge), cmpEdge);
+
+    int parent[MAXN], rank[MAXN];
+    for(int i=0;i<n;i++){ parent[i]=i; rank[i]=0; }
+
+    long long total=0;
+    printf("\nKruskal's MST edges (u - v : weight):\n");
+
+    int taken=0;
+    for(int i=0;i<ec && taken<n-1;i++){
+        Edge e = edges[i];
+        if(find_set(parent,e.u) != find_set(parent,e.v)){
+            printf(" %d - %d : %d\n", e.u, e.v, e.w);
+            total += e.w;
+            union_set(parent,rank,e.u,e.v);
+            taken++;
+        }
+    }
+
+    printf("Total cost (Kruskal): %lld\n", total);
+    return total;
+}
+
+void readGraph(int *n_ptr, int graph[MAXN][MAXN]) {
+    int n;
+    printf("\nEnter number of blood banks (nodes) [max 10]: ");
+    scanf("%d", &n);
+
+    *n_ptr = n;
+    printf("Enter adjacency matrix (%d x %d). Use 0 for NO CONNECTION.\n", n, n);
+
+    for(int i=0;i<n;i++){
+        for(int j=0;j<n;j++){
+            long long w;
+            scanf("%lld",&w);
+            graph[i][j] = (w==0 ? INF : w);
+        }
+    }
+
+    for(int i=0;i<n;i++){
+        graph[i][i] = INF;
+        for(int j=0;j<n;j++)
+            if(graph[i][j]!=INF && graph[j][i]==INF)
+                graph[j][i]=graph[i][j];
+    }
+    printf("Graph stored with %d nodes.\n", n);
+}
+
+int main() {
+    PersonInfo person = {0};
+    char bloodGroup[8]={0};
+
+    int graphEntered=0;
+    int graph_n=0;
+    int graph[MAXN][MAXN];
+
+    long long primCost=-1, kruskalCost=-1;
+    double primTime=0, kruskalTime=0;
+
+    int choice;
+
+    while(1){
+        printf("\n========== Blood Bank Connectivity System (Menu) ==========\n");
+        printf("1. Personal Information (single person)\n");
+        printf("2. Blood Group type (single)\n");
+        printf("3. Enter blood bank graph (nodes + adjacency matrix)\n");
+        printf("4. Compute MST (Prim + Kruskal)\n");
+        printf("5. Compare algorithms and recommend best\n");
+        printf("0. Exit\n");
+        printf("Enter choice: ");
+
+        scanf("%d",&choice);
+        getchar();
+
+        if(choice==0){
+            printf("Exiting...\n");
+            break;
+        }
+
+        if(choice==1){
+            inputPersonalInfo(&person);
+            printPersonalInfo(&person);
+        }
+
+        else if(choice==2){
+            inputBloodGroup(bloodGroup,sizeof(bloodGroup));
+        }
+
+        else if(choice==3){
+            readGraph(&graph_n, graph);
+            graphEntered=1;
+        }
+
+        else if(choice==4){
+            if(!graphEntered){
+                printf("Please enter graph first using case 3.\n");
+                continue;
+            }
+
+            struct timespec t0,t1;
+
+            clock_gettime(CLOCK_MONOTONIC,&t0);
+            primCost = primMST(graph_n, graph);
+            clock_gettime(CLOCK_MONOTONIC,&t1);
+            primTime = diff_seconds(t0,t1);
+            printf("Prim elapsed time: %.6f seconds\n", primTime);
+
+            clock_gettime(CLOCK_MONOTONIC,&t0);
+            kruskalCost = kruskalMST(graph_n, graph);
+            clock_gettime(CLOCK_MONOTONIC,&t1);
+            kruskalTime = diff_seconds(t0,t1);
+            printf("Kruskal elapsed time: %.6f seconds\n", kruskalTime);
+        }
+
+        else if(choice==5){
+            if(primCost==-1 || kruskalCost==-1){
+                printf("Run case 4 first (MST calculation required).\n");
+                continue;
+            }
+
+            printf("\n=========== ALGORITHM COMPARISON FOR %s ===========\n", person.name);
+            printf("Algorithm     | MST Cost | Time Taken (sec)\n");
+            printf("--------------------------------------------\n");
+            printf("Prim          | %8lld | %.6f\n", primCost, primTime);
+            printf("Kruskal       | %8lld | %.6f\n", kruskalCost, kruskalTime);
+            printf("--------------------------------------------\n");
+
+            char bestAlgo[20];
+
+            if(kruskalCost < primCost && kruskalTime < primTime)
+                strcpy(bestAlgo, "Kruskal");
+            else if(primCost < kruskalCost && primTime < kruskalTime)
+                strcpy(bestAlgo, "Prim");
+            else {
+                if(primTime < kruskalTime)
+                    strcpy(bestAlgo, "Prim");
+                else
+                    strcpy(bestAlgo, "Kruskal");
+            }
+
+            printf("\nFinal outcome:\n");
+
+           printf("\"%s\" you can use this \"%s\" algorithm to get this blood group type \"%s\" because it takes less time and it is MST.\n",
+       person.name,
+       bestAlgo,
+       bloodGroup[0] ? bloodGroup : "NO-BLOOD-GROUP");
+
+        }
+
+        else {
+            printf("Invalid choice.\n");
+        }
+    }
+
+    return 0;
+}
