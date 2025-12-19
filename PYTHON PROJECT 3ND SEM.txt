@@ -1,0 +1,604 @@
+import json
+import os
+from docx import Document
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+INVENTORY_FILE = "inventory.json"
+TRANSACTION_LOG = "transactions.log"
+
+DOCTOR_BILL_DISCOUNTS = [
+    (5000, 0.15),
+    (1000, 0.10),
+]
+
+INITIAL_ITEMS = [
+    ("Paracetamol 500mg (strip 10)", 30.0, 50, False),
+    ("Ibuprofen 400mg (strip 10)", 45.0, 40, False),
+    ("Amoxicillin 500mg (cap 10)", 120.0, 30, True),
+    ("Azithromycin 500mg (tab 3)", 90.0, 25, True),
+    ("Cough Syrup 100ml", 75.0, 20, False),
+    ("Vitamin C 500mg (strip 10)", 50.0, 60, False),
+    ("Multivitamin (bottle 30)", 250.0, 15, False),
+    ("Antacid Gel 100g", 60.0, 35, False),
+    ("Cetirizine 10mg (strip 10)", 40.0, 50, False),
+    ("Naproxen 250mg (strip 10)", 80.0, 20, False),
+    ("Metformin 500mg (strip 10)", 110.0, 45, True),
+    ("Insulin (10ml vial)", 850.0, 10, True),
+    ("Saline IV 500ml", 60.0, 12, True),
+    ("Bandage Roll 5m", 35.0, 40, False),
+    ("Antiseptic Cream 30g", 95.0, 18, False),
+    ("Hydrocortisone Cream 15g", 120.0, 12, True),
+    ("Eye Drops (10ml)", 150.0, 20, True),
+    ("Nasal Spray (10ml)", 130.0, 22, False),
+    ("Syringe 5ml (pack10)", 70.0, 30, False),
+    ("Thermometer (digital)", 650.0, 8, False),
+    ("Glucose Test Strips (pack 50)", 900.0, 6, True),
+    ("Oral Rehydration Salt (packet)", 12.0, 100, False),
+    ("Heparin Injection (1ml)", 300.0, 7, True),
+    ("Anti-allergy Injection", 450.0, 5, True),
+    ("Calcium + Vit D (strip 10)", 140.0, 28, False),
+    ("Iron Supplement (strip 10)", 80.0, 24, False),
+    ("Loratadine 10mg (strip 10)", 55.0, 45, False),
+    ("Topical Antibiotic Ointment 10g", 85.0, 33, False),
+    ("Antifungal Cream 20g", 95.0, 20, False),
+    ("Oral Antacid Tablets (pack)", 40.0, 50, False),
+    ("Probiotic Capsules (bottle 30)", 300.0, 16, False),
+    ("Ear Drops (10ml)", 120.0, 18, True),
+    ("Oral Glucose Gel", 50.0, 25, False),
+    ("Blood Pressure Monitor (arm)", 2200.0, 4, False),
+    ("Compression Socks (pair)", 800.0, 10, False),
+    ("Disposable Gloves (box 100)", 350.0, 12, False),
+    ("Face Masks (box 50)", 250.0, 30, False),
+    ("Hand Sanitizer 500ml", 180.0, 40, False),
+    ("Wound Dressings (pack 5)", 140.0, 20, False),
+    ("Sunscreen SPF50 (100ml)", 350.0, 14, False),
+    ("Antacid Suspension 200ml", 110.0, 18, False),
+    ("Laxative Syrup 200ml", 95.0, 20, False),
+    ("Cold & Flu Combo Pack", 199.0, 15, False),
+    ("Oral Pain Relief Gel 15g", 70.0, 22, False),
+    ("Antimalarial", 450.0, 8, True),
+    ("Anti-diarrheal Tablets (pack)", 60.0, 34, False),
+    ("Baby Diapers (pack)", 350.0, 18, False),
+    ("Sterile Cotton Rolls (pack)", 60.0, 50, False),
+    ("Medical Adhesive Tape 1inch", 45.0, 40, False),
+]
+
+DELIVERY_RATE_PER_KM = 15.0
+GST_RATE = 0.18  # 18% GST
+
+def ask_valid_name(prompt):
+    while True:
+        name = input(prompt).strip()
+        if not name:
+            print("Please fill this")
+            continue
+        if not name.replace(" ", "").isalpha():
+            print("Please enter valid name")
+            continue
+        return name
+
+def ask_valid_phone(prompt):
+    while True:
+        phone = input(prompt).strip()
+        if not phone:
+            print("Please fill this")
+            continue
+        if not phone.isdigit() or len(phone) != 10:
+            print("Please enter valid number")
+            continue
+        return phone
+
+def ask_int(prompt, min_val=None, max_val=None, allow_empty=False):
+    while True:
+        raw = input(prompt).strip()
+        if allow_empty and raw == "":
+            return None
+        try:
+            val = int(raw)
+            if min_val is not None and val < min_val:
+                print(f"Value must be >= {min_val}. Try again.")
+                continue
+            if max_val is not None and val > max_val:
+                print(f"Value must be <= {max_val}. Try again.")
+                continue
+            return val
+        except ValueError:
+            print("Please enter a valid whole number.")
+
+def ask_float(prompt, min_val=None, max_val=None, allow_empty=False):
+    while True:
+        raw = input(prompt).strip()
+        if allow_empty and raw == "":
+            return None
+        try:
+            val = float(raw)
+            if min_val is not None and val < min_val:
+                print(f"Value must be >= {min_val}. Try again.")
+                continue
+            if max_val is not None and val > max_val:
+                print(f"Value must be <= {max_val}. Try again.")
+                continue
+            return val
+        except ValueError:
+            print("Please enter a valid number.")
+
+def read_docx_text(path):
+    """Try to read a .docx file and return joined paragraphs or None on failure."""
+    if not path:
+        return None
+    try:
+        doc = Document(path)
+        text = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+        return text if text.strip() else None
+    except FileNotFoundError:
+        print("Word file not found.")
+        return None
+    except Exception as e:
+        print(f"Error reading Word file ({e}).")
+        return None
+
+def init_inventory():
+    if not os.path.exists(INVENTORY_FILE):
+        inventory = []
+        item_id = 1
+        for rec in INITIAL_ITEMS:
+            if len(rec) == 4:
+                name, price, stock, prescription = rec
+            else:
+                name, price, stock = rec
+                prescription = False
+            inventory.append({
+                "id": item_id,
+                "name": name,
+                "price": float(price),
+                "stock": int(stock),
+                "prescription": bool(prescription)
+            })
+            item_id += 1
+
+        try:
+            with open(INVENTORY_FILE, "w+", encoding="utf-8") as f:
+                json.dump(inventory, f, indent=2)
+        except (IOError, OSError) as e:
+            print(f"Error creating inventory file: {e}")
+    else:
+        print(f"'{INVENTORY_FILE}' already exists. Loading existing inventory.")
+
+def load_inventory():
+    try:
+        with open(INVENTORY_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if not isinstance(data, list):
+                raise TypeError("Inventory file format invalid (expected a list).")
+            for idx, it in enumerate(data):
+                if not isinstance(it, dict):
+                    raise TypeError(f"Inventory item at index {idx} is not a dict.")
+                if "prescription" not in it:
+                    it["prescription"] = False
+                if "id" not in it or "name" not in it or "price" not in it or "stock" not in it:
+                    raise KeyError(f"Inventory item at index {idx} missing required keys.")
+            return data
+    except FileNotFoundError:
+        print("Inventory file not found. Initializing new inventory.")
+        init_inventory()
+        try:
+            with open(INVENTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Failed to load newly created inventory: {e}")
+            return []
+    except json.JSONDecodeError:
+        print("Inventory file is corrupted (invalid JSON). Reinitializing inventory.")
+        init_inventory()
+        try:
+            with open(INVENTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Failed to load reinitialized inventory: {e}")
+            return []
+    except (TypeError, KeyError) as e:
+        print(f"Inventory file structure problem: {e}. Reinitializing.")
+        init_inventory()
+        try:
+            with open(INVENTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e2:
+            print(f"Failed to load reinitialized inventory: {e2}")
+            return []
+    except Exception as e:
+        print(f"Unexpected error loading inventory: {e}")
+        return []
+
+def save_inventory(inventory):
+    try:
+        with open(INVENTORY_FILE, "r+", encoding="utf-8") as f:
+            f.seek(0)
+            json.dump(inventory, f, indent=2)
+            f.truncate()
+    except FileNotFoundError:
+        try:
+            with open(INVENTORY_FILE, "w", encoding="utf-8") as f:
+                json.dump(inventory, f, indent=2)
+        except (IOError, OSError) as e:
+            print(f"Error saving inventory: {e}")
+    except (IOError, OSError) as e:
+        print(f"Error saving inventory: {e}")
+    except TypeError as e:
+        print(f"Inventory contains non-serializable data: {e}")
+
+def display_inventory_once(inventory):
+    print("\nAvailable Items (ID, Name, Price, Stock, Presc.):")
+    print(f"{'ID':>3}  {'Name':40}  {'Price':8}  {'Stock':6}  {'P' :>3}")
+    for it in inventory:
+        try:
+            presc = "Rx" if it.get("prescription", False) else "OTC"
+            print(f"{int(it.get('id', 0)):>3}  {str(it.get('name', ''))[:40]:40}  {float(it.get('price', 0.0)):8.2f}  {int(it.get('stock', 0)):6}  {presc:>3}")
+        except (ValueError, TypeError, KeyError) as e:
+            print(f"Skipped malformed inventory entry due to {e}")
+
+def search_inventory(inventory, query):
+    """
+    Return list of items whose name starts with query (case-insensitive).
+    If query == 'all', return all items.
+    """
+    q = query.strip().lower()
+    results = []
+    for it in inventory:
+        try:
+            name = str(it.get("name", "")).lower()
+            if q == "all" or name.startswith(q):
+                results.append(it)
+        except Exception:
+            continue
+    return results
+
+def display_search_results(results):
+    if not results:
+        print("No items found for that search.")
+        return
+    print(f"\n{'ID':>3}  {'Name':40}  {'Price':8}  {'Stock':6}  {'Presc.'}")
+    for it in results:
+        try:
+            presc = "Rx" if it.get("prescription", False) else "OTC"
+            print(f"{int(it.get('id',0)):>3}  {str(it.get('name',''))[:40]:40}  {float(it.get('price',0.0)):8.2f}  {int(it.get('stock',0)):6}  {presc}")
+        except Exception:
+            continue
+
+def find_item_by_id(inventory, item_id):
+    for it in inventory:
+        try:
+            if int(it.get("id", -1)) == int(item_id):
+                return it
+        except (ValueError, TypeError):
+            continue
+    return None
+
+def calculate_doctor_discount(doctor_bill):
+    for threshold, discount in DOCTOR_BILL_DISCOUNTS:
+        try:
+            if doctor_bill >= threshold:
+                return discount
+        except TypeError:
+            return 0.0
+    return 0.0
+
+def log_transaction(record):
+    try:
+        with open(TRANSACTION_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, default=str) + "\n")
+    except (IOError, OSError) as e:
+        print(f"Failed to write transaction log: {e}")
+
+def cleanup_sold_out_items(inventory):
+    popped = []
+    for idx in range(len(inventory) - 1, -1, -1):
+        try:
+            if int(inventory[idx].get("stock", 0)) <= 0:
+                popped.append(inventory.pop(idx))
+        except (ValueError, TypeError, KeyError):
+            try:
+                popped.append(inventory.pop(idx))
+            except Exception:
+                pass
+    return popped
+
+def analyze_and_plot_transactions(top_n=10):
+   
+    if not os.path.exists(TRANSACTION_LOG):
+        print("No transactions log found to analyze.")
+        return
+
+    try:
+        df = pd.read_json(TRANSACTION_LOG, lines=True)
+    except Exception as e:
+        print(f"Failed to read transactions log: {e}")
+        return
+
+    if df.empty:
+        print("No transactions to analyze.")
+        return
+
+    if "items" not in df.columns:
+        print("No 'items' field in transaction records.")
+        return
+
+    df_items = df.explode("items")
+    items_df = pd.json_normalize(df_items["items"])
+
+    if "quantity" not in items_df.columns:
+        print("No 'quantity' in items -- cannot aggregate.")
+        return
+
+    items_df["quantity"] = pd.to_numeric(items_df["quantity"], errors="coerce").fillna(0).astype(int)
+    items_df["name"] = items_df["name"].astype(str)
+
+    agg = items_df.groupby("name")["quantity"].sum().sort_values(ascending=False)
+    top = agg.head(top_n)
+    if top.empty:
+        print("No item sales found in logs.")
+        return
+
+    sns.set(style="whitegrid")
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x=top.values, y=top.index)
+    plt.xlabel("Quantity Sold")
+    plt.ylabel("Item")
+    plt.title(f"Top {len(top)} Selling Items (by quantity)")
+    plt.tight_layout()
+
+    out_file = "sales_bar.png"
+    plt.savefig(out_file)
+    print(f"Saved bar chart to {out_file}")
+    plt.show()
+
+def run_billing_session():
+    init_inventory()
+    inventory = load_inventory()
+
+    print("\nWelcome to the Medical Billing System.")
+    customer_name = ask_valid_name("Customer name: ")
+
+    print("\nPatient Details:")
+    word_path = input("Paste Word (.docx) file path or press Enter to skip: ").strip()
+
+    patient_details = ""
+
+    if word_path:
+        try:
+            doc = Document(word_path)
+            patient_details = "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
+            print("\n--- Patient Details Extracted ---")
+            print(patient_details)
+            print("---------------------------------\n")
+        except FileNotFoundError:
+            print("Word file not found. Proceeding without patient details.")
+            patient_details = "N/A"
+        except Exception as e:
+            print(f"Error reading Word file ({e}). Proceeding without patient details.")
+            patient_details = "N/A"
+    else:
+        patient_details = "N/A"
+
+    doctor_bill = 0.0
+    doctor_info = None
+    doctor_prescription_text = None
+    saw_doctor = input("Was there a doctor's consultation? (y/n): ").strip().lower()
+    if saw_doctor == "y":
+        doc_name = input("Doctor's name (optional): ").strip()
+        db_val = ask_float("Enter doctor's consultation bill amount (numeric): ", min_val=0.0, allow_empty=True)
+        if db_val is not None:
+            doctor_bill = db_val
+
+        pres_path = input("Paste Doctor's Prescription (.docx) file path or press Enter to skip: ").strip()
+        if pres_path:
+            pres_text = read_docx_text(pres_path)
+            if pres_text:
+                doctor_prescription_text = pres_text
+                print("\n--- Doctor's Prescription Extracted ---")
+                print(doctor_prescription_text)
+                print("---------------------------------------\n")
+        doctor_info = {"doctor_name": doc_name or "N/A", "doctor_fee": doctor_bill, "prescription_text": doctor_prescription_text}
+
+    discount_fraction = calculate_doctor_discount(doctor_bill)
+    if discount_fraction > 0:
+        print(f"Doctor consultation qualifies for a {int(discount_fraction*100)}% discount.")
+
+    display_inventory_once(inventory)
+    print("\nSearch tips: type a letter or substring to show items starting with it.")
+    print("Type 'all' to show all items. Type 'done' when finished shopping.\n")
+
+    cart = []
+    while True:
+        query = input("Search items (or type 'done' to finish): ").strip()
+        if query.lower() == "done":
+            break
+        if query == "":
+            print("Enter a search term (or 'all' or 'done').")
+            continue
+
+        results = search_inventory(inventory, query)
+        display_search_results(results)
+        if not results:
+            continue
+
+        choice = input("Enter item ID from results to add to cart (or press Enter to search again): ").strip()
+        if choice == "":
+            continue
+        if not choice.isdigit():
+            print("Enter a valid numeric ID.")
+            continue
+
+        item_id = int(choice)
+        item = find_item_by_id(inventory, item_id)
+        if not item:
+            print("Invalid ID.")
+            continue
+
+        stock_available = int(item.get("stock", 0))
+        if stock_available <= 0:
+            print("Out of stock.")
+            continue
+
+        if item.get("prescription", False):
+            if not doctor_prescription_text:
+                print(f"'{item.get('name')}' requires a doctor's prescription.")
+                pres_prompt = input("Please add the Doctor's Prescription (.docx path) now or type 'no' to cancel: ").strip()
+                if pres_prompt.lower() == "no" or pres_prompt == "":
+                    print("Cannot sell prescription medicine without doctor's prescription. Skipping item.")
+                    continue
+                else:
+                    pres_text = read_docx_text(pres_prompt)
+                    if pres_text:
+                        doctor_prescription_text = pres_text
+                        if not doctor_info:
+                            doctor_info = {"doctor_name": "N/A", "doctor_fee": 0.0, "prescription_text": doctor_prescription_text}
+                        else:
+                            doctor_info["prescription_text"] = doctor_prescription_text
+
+                        print("\n--- Doctor's Prescription Extracted ---")
+                        print(doctor_prescription_text)
+                        print("---------------------------------------\n")
+                    else:
+                        print("Prescription not added or unreadable. Skipping item.")
+                        continue
+
+        qty = ask_int(f"Quantity for {item.get('name', 'item')} (Available {stock_available}): ", min_val=1, max_val=stock_available)
+        if qty is None:
+            print("No quantity entered. Skipping.")
+            continue
+
+        unit_price = float(item.get("price", 0.0))
+
+        cart.append({
+            "id": int(item.get("id", item_id)),
+            "name": str(item.get("name", "Unknown")),
+            "unit_price": round(unit_price, 2),
+            "quantity": qty,
+            "line_total": round(unit_price * qty, 2)
+        })
+
+        item["stock"] = stock_available - qty
+
+        print("Added to cart!")
+
+    if not cart:
+        print("No items purchased. Exiting.")
+        return
+
+    delivery_info = {
+        "door_delivery": "No",
+        "address": "N/A",
+        "phone": "N/A",
+        "payment_mode": "N/A",
+        "distance_km": 0.0,
+        "delivery_charge": 0.0
+    }
+
+    dd_raw = input("Door delivery is there (Y/N): ").strip().lower()
+    if dd_raw == "y":
+        delivery_info["door_delivery"] = "Yes"
+        delivery_info["address"] = input("Enter delivery address: ").strip() or "N/A"
+        delivery_info["phone"] = ask_valid_phone("Enter phone number: ")
+        pm = input("Payment method (UPI / Cash on Delivery): ").strip()
+        if pm:
+            pm_lower = pm.lower()
+            if "upi" in pm_lower:
+                delivery_info["payment_mode"] = "UPI"
+            elif "cash" in pm_lower or "cod" in pm_lower:
+                delivery_info["payment_mode"] = "Cash on Delivery"
+            else:
+                delivery_info["payment_mode"] = pm
+
+        km_val = ask_float("Enter delivery distance in kilometers (numeric): ", min_val=0.0)
+        if km_val is None:
+            km_val = 0.0
+        delivery_info["distance_km"] = round(km_val, 2)
+        delivery_info["delivery_charge"] = round(DELIVERY_RATE_PER_KM * delivery_info["distance_km"], 2)
+
+    subtotal = sum(c.get("line_total", 0) for c in cart)
+
+    discount_amount = round(subtotal * discount_fraction, 2)
+    delivery_charge = delivery_info.get("delivery_charge", 0.0)
+
+    taxable_amount = round(subtotal - discount_amount + delivery_charge, 2)
+    gst_amount = round(taxable_amount * GST_RATE, 2)
+    final_total = round(taxable_amount + gst_amount, 2)
+
+    print("\n" + "=" * 40)
+    print("FINAL BILL")
+    print(f"Customer: {customer_name}")
+
+    print("\nPatient Details:")
+    print(patient_details)
+    print("-" * 40)
+
+    if doctor_info:
+        print(f"Doctor: {doctor_info.get('doctor_name','N/A')}  Fee: {doctor_info.get('doctor_fee',0.0):.2f}")
+        if doctor_info.get('prescription_text'):
+            print("\nDoctor's Prescription:")
+            print(doctor_info.get('prescription_text'))
+
+    print(f"{'Item':35} {'Qty':>3} {'Unit':>8} {'Line':>8}")
+    for c in cart:
+        print(f"{c['name'][:35]:35} {c['quantity']:>3} {c['unit_price']:8.2f} {c['line_total']:8.2f}")
+
+    print("-" * 40)
+    print(f"{'Subtotal:':30} {subtotal:8.2f}")
+    if discount_amount > 0:
+        print(f"{'Doctor Discount:':30} -{discount_amount:7.2f}")
+    if delivery_charge > 0:
+        print(f"{'Delivery Charge:':30} {delivery_charge:8.2f}")
+    print(f"{'Taxable Amount:':30} {taxable_amount:8.2f}")
+    print(f"{'GST (18%):':30} {gst_amount:8.2f}")
+    print(f"{'Total Payable:':30} {final_total:8.2f}")
+
+    print("\nDelivery Details:")
+    print(f"Door Delivery: {delivery_info['door_delivery']}")
+    if delivery_info["door_delivery"] == "Yes":
+        print(f"Address: {delivery_info['address']}")
+        print(f"Phone: {delivery_info['phone']}")
+        print(f"Payment Mode: {delivery_info['payment_mode']}")
+        print(f"Distance (km): {delivery_info['distance_km']}")
+        print(f"Delivery Charge (@ ₹{DELIVERY_RATE_PER_KM:.2f}/km): {delivery_info['delivery_charge']:.2f}")
+
+    print("=" * 40)
+
+    save_inventory(inventory)
+
+    popped_items = cleanup_sold_out_items(inventory)
+    if popped_items:
+        print("\nSold out items removed from in-memory list:")
+        for p in popped_items:
+            print(f"- {p.get('name','Unknown')}")
+
+    transaction_record = {
+        "customer": customer_name,
+        "patient_details": patient_details,
+        "doctor_bill": doctor_bill,
+        "doctor_info": doctor_info,
+        "doctor_prescription_text": doctor_prescription_text,
+        "discount_fraction": discount_fraction,
+        "subtotal": subtotal,
+        "discount_amount": discount_amount,
+        "delivery_charge": delivery_charge,
+        "taxable_amount": taxable_amount,
+        "gst_rate": GST_RATE,
+        "gst_amount": gst_amount,
+        "total": final_total,
+        "items": cart,
+        "delivery_info": delivery_info
+    }
+    log_transaction(transaction_record)
+
+    print("\nThank you for your purchase!")
+    print("— End of bill —\n")
+
+    ans = input("Generate sales bar chart from transactions log? (y/n):").strip().lower()
+    if ans == "y":
+        analyze_and_plot_transactions(top_n=10)
+
+if __name__ == "__main__":
+    run_billing_session()
