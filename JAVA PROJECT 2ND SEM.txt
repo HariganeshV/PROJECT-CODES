@@ -1,0 +1,270 @@
+import java.io.*;
+import java.util.*;
+
+class Book {
+    String title;
+    double fee;
+    boolean isIssued;
+    boolean isFeePaid;
+    long issueTime;
+    String genre;
+
+    public Book(String title, double fee, String genre) {
+        this.title = title;
+        this.fee = fee;
+        this.genre = genre;
+        this.isIssued = false;
+        this.isFeePaid = false;
+        this.issueTime = 0;
+    }
+
+    public Book(String[] parts) {
+        this.title = parts[0];
+        this.fee = Double.parseDouble(parts[1]);
+        this.genre = parts[2];
+        this.isIssued = Boolean.parseBoolean(parts[3]);
+        this.isFeePaid = Boolean.parseBoolean(parts[4]);
+        this.issueTime = Long.parseLong(parts[5]);
+    }
+
+    public String toFileString() {
+        return title + "," + fee + "," + genre + "," + isIssued + "," + isFeePaid + "," + issueTime;
+    }
+
+    @Override
+    public String toString() {
+        return title + " | " + fee + " | " + (isIssued ? "Issued" : "Available")
+                + " | Fee Paid: " + (isFeePaid ? "Yes" : "No");
+    }
+}
+
+public class SimpleLibrary {
+    static Scanner sc = new Scanner(System.in);
+    static List<Book> books = new ArrayList<>();
+    static final String FILE_NAME = "book.txt";
+
+    static final Map<String, List<String>> genreSamples = Map.of(
+        "FANTASY", List.of("Harry Potter", "The Hobbit", "The Name of the Wind", "Mistborn", "Eragon"),
+        "ROMANCE", List.of("Pride and Prejudice", "Me Before You", "The Notebook", "Outlander", "The Time Traveler's Wife"),
+        "MYSTERY/THRILLER", List.of("Gone Girl", "The Girl with the Dragon Tattoo", "Sherlock Holmes", "The Da Vinci Code", "The Silent Patient"),
+        "SCIENCE FICTION", List.of("Dune", "Ender's Game", "Neuromancer", "The Martian", "Foundation"),
+        "HISTORICAL FICTION", List.of("All the Light We Cannot See", "The Book Thief", "Wolf Hall", "The Pillars of the Earth", "Memoirs of a Geisha"),
+        "HORROR", List.of("It", "The Shining", "Dracula", "Bird Box", "The Haunting of Hill House"),
+        "HUMOR", List.of("Good Omens", "The Hitchhiker's Guide to the Galaxy", "Bossypants", "Yes Please", "Diary of a Wimpy Kid")
+    );
+
+    public static void main(String[] args) {
+        loadBooksFromFile();
+
+        while (true) {
+            System.out.println("\n--- Library Menu ---");
+            System.out.println("1. Add Book");
+            System.out.println("2. View Books");
+            System.out.println("3. Pick a Book");
+            System.out.println("4. Pay Fee");
+            System.out.println("5. Return Book");
+            System.out.println("6. Exit");
+            System.out.print("Enter your choice: ");
+
+            int choice = sc.nextInt();
+            sc.nextLine(); // consume newline
+
+            switch (choice) {
+                case 1 -> addBook();
+                case 2 -> viewBooks();
+                case 3 -> pickBook();
+                case 4 -> payFee();
+                case 5 -> returnBook();
+                case 6 -> {
+                    saveBooksToFile();
+                    System.out.println("Exiting... Goodbye!");
+                    return;
+                }
+                default -> System.out.println("Invalid choice.");
+            }
+        }
+    }
+
+    static void addBook() {
+        System.out.print("Enter book title: ");
+        String title = sc.nextLine();
+        System.out.print("Enter book fee: ");
+        double fee = sc.nextDouble();
+        sc.nextLine();
+        System.out.print("Enter book genre: ");
+        String genre = sc.nextLine().toUpperCase();
+        books.add(new Book(title, fee, genre));
+        saveBooksToFile();
+        System.out.println("Book added successfully.");
+    }
+
+    static void viewBooks() {
+        if (books.isEmpty()) {
+            System.out.println("No books available.");
+            return;
+        }
+
+        System.out.println("\nBooks in Library:");
+        Map<String, List<Book>> grouped = new LinkedHashMap<>();
+        for (Book book : books) {
+            grouped.computeIfAbsent(book.genre, k -> new ArrayList<>()).add(book);
+        }
+
+        int count = 1;
+        for (String genre : genreSamples.keySet()) {
+            System.out.println("\n[" + genre + "]");
+            List<Book> genreBooks = grouped.getOrDefault(genre, new ArrayList<>());
+            if (genreBooks.isEmpty()) {
+                System.out.println("  No books available.");
+            } else {
+                for (Book b : genreBooks) {
+                    System.out.println("  " + (count++) + ". " + b);
+                }
+            }
+        }
+    }
+
+    static List<Book> getBooksByGenre(String genre) {
+        List<Book> genreBooks = new ArrayList<>();
+        for (Book book : books) {
+            if (book.genre.equalsIgnoreCase(genre)) {
+                genreBooks.add(book);
+            }
+        }
+        return genreBooks;
+    }
+
+    static void pickBook() {
+        System.out.print("Enter genre: ");
+        String genre = sc.nextLine().toUpperCase();
+        List<Book> genreBooks = getBooksByGenre(genre);
+
+        if (genreBooks.isEmpty()) {
+            System.out.println("No books available in this genre.");
+            return;
+        }
+
+        System.out.println("\nBooks in " + genre + ":");
+        for (int i = 0; i < genreBooks.size(); i++) {
+            System.out.println("  " + (i + 1) + ". " + genreBooks.get(i));
+        }
+
+        System.out.print("Enter book number to pick: ");
+        int index = sc.nextInt() - 1;
+        sc.nextLine();
+
+        if (index >= 0 && index < genreBooks.size()) {
+            Book book = genreBooks.get(index);
+            if (!book.isIssued) {
+                book.isIssued = true;
+                book.issueTime = System.currentTimeMillis();
+                saveBooksToFile();
+                System.out.println("Book issued successfully.");
+            } else {
+                System.out.println("Book is already issued.");
+            }
+        } else {
+            System.out.println("Invalid book number.");
+        }
+    }
+
+    static void payFee() {
+        System.out.print("Enter genre: ");
+        String genre = sc.nextLine().toUpperCase();
+        List<Book> genreBooks = getBooksByGenre(genre);
+
+        if (genreBooks.isEmpty()) {
+            System.out.println("No books available in this genre.");
+            return;
+        }
+
+        System.out.println("\nBooks in " + genre + ":");
+        for (int i = 0; i < genreBooks.size(); i++) {
+            System.out.println("  " + (i + 1) + ". " + genreBooks.get(i));
+        }
+
+        System.out.print("Enter book number to pay fee: ");
+        int index = sc.nextInt() - 1;
+        sc.nextLine();
+
+        if (index >= 0 && index < genreBooks.size()) {
+            Book book = genreBooks.get(index);
+            if (!book.isFeePaid) {
+                book.isFeePaid = true;
+                saveBooksToFile();
+                System.out.println("Fee " + book.fee + " paid for: " + book.title);
+            } else {
+                System.out.println("Fee already paid.");
+            }
+        } else {
+            System.out.println("Invalid book number.");
+        }
+    }
+
+    static void returnBook() {
+        System.out.print("Enter genre: ");
+        String genre = sc.nextLine().toUpperCase();
+        List<Book> genreBooks = getBooksByGenre(genre);
+
+        if (genreBooks.isEmpty()) {
+            System.out.println("No books available in this genre.");
+            return;
+        }
+
+        System.out.println("\nBooks in " + genre + ":");
+        for (int i = 0; i < genreBooks.size(); i++) {
+            System.out.println("  " + (i + 1) + ". " + genreBooks.get(i));
+        }
+
+        System.out.print("Enter book number to return: ");
+        int index = sc.nextInt() - 1;
+        sc.nextLine();
+
+        if (index >= 0 && index < genreBooks.size()) {
+            Book book = genreBooks.get(index);
+            if (book.isIssued) {
+                book.isIssued = false;
+                book.isFeePaid = false;
+                book.issueTime = 0;
+                saveBooksToFile();
+                System.out.println("Book returned successfully.");
+            } else {
+                System.out.println("Book is not issued.");
+            }
+        } else {
+            System.out.println("Invalid book number.");
+        }
+    }
+
+    static void saveBooksToFile() {
+        try (PrintWriter writer = new PrintWriter(new FileWriter(FILE_NAME))) {
+            for (Book book : books) {
+                writer.println(book.toFileString());
+            }
+        } catch (IOException e) {
+            System.out.println("Error saving books: " + e.getMessage());
+        }
+    }
+
+    static void loadBooksFromFile() {
+        File file = new File(FILE_NAME);
+        if (!file.exists()) {
+            for (Map.Entry<String, List<String>> entry : genreSamples.entrySet()) {
+                for (String title : entry.getValue()) {
+                    books.add(new Book(title, 200, entry.getKey()));
+                }
+            }
+            saveBooksToFile();
+            return;
+        }
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(FILE_NAME))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                books.add(new Book(line.split(",")));
+            }
+        } catch (IOException e) {
+            System.out.println("Error loading books: " + e.getMessage());
+        }
+    }
+}
