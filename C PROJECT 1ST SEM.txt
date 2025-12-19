@@ -1,0 +1,253 @@
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
+struct Item {
+    char name[50];
+    char barcode[20];
+    float price;
+    int quantity;
+};
+
+struct Customer {
+    char name[50];
+    char phone_number[15];
+    char address[100];
+    int credit_points;
+};
+
+int displayCustomerDetails() {
+    struct Customer customers[] = {
+        {"JOHAN", "1234567890", "12 Main St,Chennai", 1000},
+        {"AJITH", "9876543210", "45 Park Ave,Chennai", 2000},
+        {"VIJAY","8346528709","23 Mugappair,Chennai",3000},
+        {"Riya","6248442846","53 Anna Nagar,Chennai", 4500},
+        {"Dia","8428053567","12 Chrompet,Chennai",2500},
+        {"Berti","9360111840","16 Vadapalani,Chennai",6000},
+        {"Daphy","8905672921","2 Maduravoyal,Chennai ",5500},
+        {"Fany","7937469274","5 Ayapakkam ,Chennai",7000},
+        {"Rizz","6373652886","9 Ambattur,Chennai",8500},
+        {"Jiya","6463735354","1 Koyambedu,Chennai",9000}
+	
+    };
+
+    printf("\nRegular Customer Details:\n");
+    printf("\nName\tPhone Number\tAddress\t\t\tCredit Points\n");
+    for (int i = 0; i < 10; i++) {
+        printf("%s\t%s\t%s\t%d\n", customers[i].name, customers[i].phone_number, customers[i].address, customers[i].credit_points);
+    }
+     printf("\n------------------------------------------------------------\n");
+    return 0;
+}
+
+int displayDiscounts() {
+    struct Item items[] = { 
+        {"\nApple","001", 50.0}, 
+        {"Banana","002", 20.0}, 
+        {"Orange","003", 30.0},
+        {"Grapes","004", 20.0},
+        {"Cherry","005" , 50.0},
+        {"Kiwi" ,"006" , 60.0},
+        {"Mango" ,"007" , 90.0},
+        {"Papaya" ,"008" , 40.0},
+        {"Pear" ,"009" , 90.0},
+        {"Guava" ,     "010" , 30.0},
+
+        {"\nCarrot", "101" , 20.0},
+        {"Beans","102",10.0},
+        {"Tomato","103",55.0},
+        {"Onion","104",50.0},
+		{"Peas","105",5.0},
+		{"Brinjal","106",15.0},
+		{"Chilli","107",30.0},
+		{"Garlic","108",40.0},
+		{"Corn","109",50.0},
+		{"Potato","110",45.0},
+		
+		{"\nButter","201",50.0},
+		{"Cheese","202",80.0},
+		{"Eggs","203",5.0},
+		{"Milk","204",25.0},
+		{"Cream","205",45.0},
+		{"Yogurt","206",50.0},
+		{"Water","207",10.0},
+		
+		{"\nBread","301",35.0},
+		{"Bun","302",10.0},
+		{"Cereal","303",65.0},
+		{"Rice","304",100.0},
+		{"Pasta","305",50.0},
+		{"Wheat","306",75.0},
+		{"Oatmeal","307",65.0},
+		{"Tea ","308",250.0},
+		{"Coffee","309",300.0},
+		{"Dal","310", 75.0},
+		{"Sugar","311",150.0},
+		{"Salt","312",120.0},
+		
+		{"\nCandy","401",10.0},
+		{"Chocos","402",120.0},
+		{"Chips","403",45.0},
+		{"Cookies","404",60.0},
+		{"Nuts","405",170.0},
+	    
+	    {"\nBrush","501",15.0},
+	    {"Paste","502",45.0},
+	    {"Shampoo","503",250.0},
+	    {"Serum","504",320.0},
+	    {"Soap","505",50.0},
+	    {"Perfume","506",120.0}
+	
+    };
+
+    printf("Item\tBarcode\tPrice\tDiscount Price\n");
+    for (int i = 0; i <50 ; i++) {
+        float discountPrice = items[i].price * 0.9;
+        printf("%s\t%s\t%.2f\t%.2f\n", items[i].name, items[i].barcode, items[i].price, discountPrice);
+    }
+    printf("\n----------------------------------\n");
+    return 0;
+}
+
+int generateBill() {
+    int n, i;
+    float total = 0;
+    float discount = 0;
+    float gst = 0;
+    char carry_bag;
+    char phone_number[10];
+    char customer_name[50];
+    char customer_address[100];
+    char customer_email[50];
+    char delivery_option;
+    time_t t = time(NULL);
+    struct tm *time_ptr = localtime(&t);
+
+    printf("\nEnter customer name: ");
+    scanf(" %[^\n]", customer_name);
+
+    printf("Enter customer address: ");
+    scanf(" %[^\n]", customer_address);
+
+    printf("Enter your phone number: ");
+    scanf(" %s", phone_number);
+
+    while (strlen(phone_number) != 10) {
+        if (strlen(phone_number) < 10) {
+            printf("Please enter 10 numbers: ");
+            scanf(" %s", phone_number);
+        } else {
+            printf("Please enter only 10 numbers: ");
+            scanf(" %s", phone_number);
+        }
+    }
+
+    printf("Enter your email address: ");
+    scanf(" %[^\n]", customer_email);
+
+    printf("\n\nEnter the number of items: ");
+    scanf("%d", &n);
+
+    struct Item items[n];
+
+    printf("Enter the details of each item:\n");
+    for (i = 0; i < n; i++) {
+        printf("\n\nItem %d:\n", i + 1);
+        printf("\nName: ");
+        scanf(" %[^\n]", items[i].name);
+        printf("Price: ");
+        scanf("%f", &items[i].price);
+        printf("Quantity: ");
+        scanf("%d", &items[i].quantity);
+    }
+
+    printf("\nDo you want to add a carry bag? (y/n): ");
+    scanf(" %c", &carry_bag);
+
+    printf("Do you want door delivery? (y/n): ");
+    scanf(" %c", &delivery_option);
+
+    printf("\nGrocery Bill\n");
+    printf("--------------------\n");
+    printf("SRET GROCERY STORE\n");
+    printf("PORUR,CHENNAI-600 116\n");
+    printf("PHONE NUMBER-044 7325160\n");
+    printf("Date: %d-%d-%d\n", time_ptr->tm_mday, time_ptr->tm_mon + 1, time_ptr->tm_year + 1900);
+    printf("Time: %d:%d:%d\n", time_ptr->tm_hour, time_ptr->tm_min, time_ptr->tm_sec);
+    printf("\nCustomer Name`: %s\n", customer_name);
+    printf("Customer Address: %s\n", customer_address);
+    printf("Customer phone number: %s\n", phone_number);
+    printf("Customer email address: %s\n", customer_email);
+    printf("\nItem\tPrice\tQuantity\tAmount\n");
+
+    for (i = 0; i < n; i++) {
+        float amount = items[i].price * items[i].quantity;
+        if (amount > 1000) {
+            discount += amount * 0.1;
+        }
+printf("%s\t%.2f\t%d\t%.2f\n", items[i].name, items[i].price, items[i].quantity, amount);
+        total += amount;
+    }
+
+    if (carry_bag == 'y' || carry_bag == 'Y') {
+        total += 10;
+        printf("Carry bag: 10.00\n");
+    }
+
+    if (delivery_option == 'y' || delivery_option == 'Y') {
+        printf("\nDELIVERY ACCEPTED\n");
+        float delivery_distance;
+        printf("Enter delivery distance (in km): ");
+        scanf("%f", &delivery_distance);
+        float delivery_charge = delivery_distance * 100;
+        total += delivery_charge;
+        printf("Delivery charge: %.2f\n", delivery_charge);
+    } else {
+        printf("\nNO DELIVERY\n");
+    }
+
+    gst = total * 0.18; 
+
+    printf("--------------------\n");
+    printf("Subtotal: %.2f\n", total);
+    printf("Discount: %.2f\n", discount);
+    printf("GST (18%%): %.2f\n", gst);
+    printf("Total Amount: %.2f\n", total - discount + gst);
+
+    printf("\nNO RETURN POLICY \n");
+    printf("DOOR DELIVERY AVAILABLE\n");
+
+    printf("\nTHANK YOU FOR YOUR PURCHASE!\n");
+    printf("\nVISIT US AGAIN !!!\n");
+ return 0;
+}
+int main() {
+    int choice;
+    do {
+        printf("\n--- Menu ---\n");
+        printf("1. Display regular customer details\n");
+        printf("2. Display items with barcode, price and discount price\n");
+        printf("3. Generate grocery bill\n");
+        printf("4. Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        switch (choice) {
+            case 1:
+                displayCustomerDetails();
+                break;
+            case 2:
+                displayDiscounts();
+                break;
+            case 3:
+                generateBill();
+                break;
+            case 4:
+                printf("Exiting...\n");
+                break;
+            default:
+                printf("Invalid choice. Please try again.\n");
+        }
+    } while (choice != 4);
+    return 0;
+}
