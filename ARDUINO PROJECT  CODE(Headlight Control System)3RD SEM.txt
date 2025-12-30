@@ -1,0 +1,96 @@
+const int trigPin = 7;
+const int echoPin = 6;
+const int ldr1Pin = A0;
+const int ldr2Pin = A1;
+const int led1Pin = 9;
+const int led2Pin = 10;
+
+int LDR_LIGHT_THRESHOLD = 500; 
+
+const int OBSTACLE_CM = 70;
+
+const int BRIGHT_DULL = 64;  
+const int BRIGHT_FULL = 255;  
+
+const int MIN_VALID_CM = 2;
+const int MAX_VALID_CM = 400;
+
+unsigned long duration_us = 0;
+
+int readDistanceCm() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  duration_us = pulseIn(echoPin, HIGH, 30000UL);
+  if (duration_us == 0) return -1;
+
+  int cm = (int)(duration_us * 0.034 / 2.0);
+  if (cm < MIN_VALID_CM || cm > MAX_VALID_CM) return -1;
+  return cm;
+}
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  pinMode(led1Pin, OUTPUT);
+  pinMode(led2Pin, OUTPUT);
+  digitalWrite(trigPin, LOW);
+  delay(50);
+}
+
+void loop() {
+  int ldr1 = analogRead(ldr1Pin);
+  int ldr2 = analogRead(ldr2Pin);
+
+  bool ldr1SeesLight = (ldr1 > LDR_LIGHT_THRESHOLD);
+  bool ldr2SeesLight = (ldr2 > LDR_LIGHT_THRESHOLD);
+
+  bool needUltrasonic = (!ldr1SeesLight) || (!ldr2SeesLight);
+  int distance = -1;
+  if (needUltrasonic) {
+    distance = readDistanceCm(); // may be -1 if invalid
+  }
+
+  int led1Brightness = 0;
+  int led2Brightness = 0;
+
+  if (ldr1SeesLight) {
+    led1Brightness = BRIGHT_DULL;
+  } else {
+    if (distance > 0 && distance <= OBSTACLE_CM) led1Brightness = BRIGHT_DULL;
+    else led1Brightness = BRIGHT_FULL;
+  }
+
+  if (ldr2SeesLight) {
+    led2Brightness = BRIGHT_DULL;
+  } else {
+    if (distance > 0 && distance <= OBSTACLE_CM) led2Brightness = BRIGHT_DULL;
+    else led2Brightness = BRIGHT_FULL;
+  }
+
+  analogWrite(led1Pin, led1Brightness);
+  analogWrite(led2Pin, led2Brightness);
+
+  Serial.print("LDR1: "); Serial.print(ldr1);
+  Serial.print(" (light? "); Serial.print(ldr1SeesLight ? "Y":"N"); Serial.print(")  ");
+  Serial.print("LDR2: "); Serial.print(ldr2);
+  Serial.print(" (light? "); Serial.print(ldr2SeesLight ? "Y":"N"); Serial.print(")  ");
+
+  if (needUltrasonic) {
+    if (distance < 0) Serial.print("Dist: N/A");
+    else {
+      Serial.print("Dist: "); Serial.print(distance); Serial.print("cm");
+    }
+  } else {
+    Serial.print("Ultrasonic: not used");
+  }
+
+  Serial.print("  LED1: "); Serial.print(led1Brightness);
+  Serial.print("  LED2: "); Serial.println(led2Brightness);
+
+  delay(150);
+}
